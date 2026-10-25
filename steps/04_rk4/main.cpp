@@ -107,11 +107,15 @@ struct Ray {
     void update() {
         const double h = kStep / substeps;
         for (int i = 0; i < substeps; ++i) {
+            // Same horizon rule as step 3. It matters more here: RK4 samples the
+            // equations halfway through the step, and a sample at f = 0 blows up.
+            if (state.r + state.dr * h <= kRs) {
+                fallIn();
+                break;
+            }
             state = method == Method::RK4 ? rk4Step(state, energy, h) : eulerStep(state, energy, h);
             if (!(state.r > kRs)) {
-                state.r = kRs;
-                active = false;
-                fellIn = true;
+                fallIn();
                 break;
             }
         }
@@ -122,6 +126,12 @@ struct Ray {
         if (trail.size() > kTrailLength) {
             trail.pop_front();
         }
+    }
+
+    void fallIn() {
+        state.r = kRs;
+        active = false;
+        fellIn = true;
     }
 
     sf::Vector2f position() const {

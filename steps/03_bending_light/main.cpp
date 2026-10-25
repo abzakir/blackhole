@@ -87,18 +87,30 @@ struct Ray {
     }
 
     void update() {
-        eulerStep(state, energy, kStep);
-        if (!(state.r > kRs)) {  // crossed the horizon (the "!" form also catches NaN)
-            state.r = kRs;       // end the trail on the horizon
-            active = false;
-            fellIn = true;
-        } else if (state.r > kEscape && state.dr > 0.0) {  // far away and still leaving
-            active = false;
+        // The equations divide by f = 1 - r_s/r, which is 0 at the horizon: these
+        // coordinates break down there, even though nothing physical happens. So a ray
+        // that would reach the horizon within this step falls in before we evaluate the
+        // equations there. That is safe: light this close and moving inward can't escape.
+        if (state.r + state.dr * kStep <= kRs) {
+            fallIn();
+        } else {
+            eulerStep(state, energy, kStep);
+            if (!(state.r > kRs)) {  // slipped through anyway (the "!" form also catches NaN)
+                fallIn();
+            } else if (state.r > kEscape && state.dr > 0.0) {  // far away and still leaving
+                active = false;
+            }
         }
         trail.push_back(position());
         if (trail.size() > kTrailLength) {
             trail.pop_front();
         }
+    }
+
+    void fallIn() {
+        state.r = kRs;  // end the trail on the horizon
+        active = false;
+        fellIn = true;
     }
 
     // Back from polar to x, y for drawing.
