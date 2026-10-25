@@ -1,10 +1,5 @@
-// blackhole.frag - step 6: the accretion disk.
-//
-// Same ray tracer as step 5, plus a thin disk of hot gas in the y = 0 plane. After
-// every RK4 step the ray checks whether it crossed that plane. If it did, inside the
-// disk, it picks up the light the gas gives off there, and partly or fully stops.
-//
-// Units: r_s = 1 and c = 1. The black hole sits at the origin, y is up.
+// Step 6: step 5's ray tracer plus a thin accretion disk in the y = 0 plane.
+// Units: r_s = 1, c = 1. Black hole at the origin, y up.
 #version 120
 
 uniform vec2 u_resolution;
@@ -14,8 +9,8 @@ uniform vec3 u_camUp;
 uniform vec3 u_camForward;
 uniform float u_tanHalfFov;
 uniform bool u_showGrid;
-uniform int u_shiftMode;  // 0 plain, 1 + gravitational redshift, 2 + Doppler as well
-uniform float u_time;     // seconds, turns the disk
+uniform int u_shiftMode;  // 0 plain, 1 redshift, 2 redshift + Doppler
+uniform float u_time;     // seconds
 
 const float RS = 1.0;
 const float ESCAPE_R = 1000.0;
@@ -23,13 +18,13 @@ const float STEP_SCALE = 0.05;
 const int MAX_STEPS = 1000;
 const float PI = 3.14159265;
 
-const float DISK_IN = 3.0;        // innermost stable circular orbit: gas inside it falls in
+const float DISK_IN = 3.0;        // innermost stable circular orbit
 const float DISK_OUT = 12.0;
-const float DISK_PEAK_T = 4500.0; // kelvin, at the hottest radius (chosen for looks)
-const float EXPOSURE = 0.9;       // overall disk brightness before tone mapping
-const float TIME_SCALE = 4.0;     // speeds up the orbits so you can see them move
+const float DISK_PEAK_T = 4500.0; // peak temperature in kelvin, picked for looks
+const float EXPOSURE = 0.9;       // disk brightness
+const float TIME_SCALE = 4.0;     // speeds up the disk rotation
 
-// ---- light bending and RK4: unchanged from step 5 ----
+// Light bending and RK4, same as step 5.
 
 vec3 acceleration(vec3 x, float h2) {
     float r2 = dot(x, x);
@@ -49,7 +44,7 @@ void rk4Step(inout vec3 x, inout vec3 v, float h2, float dt) {
     v += dt / 6.0 * (k1v + 2.0 * k2v + 2.0 * k3v + k4v);
 }
 
-// ---- the sky: unchanged from step 5 ----
+// Sky, same as step 5.
 
 float hash(vec3 p) {
     return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
@@ -107,10 +102,9 @@ vec3 skyGrid(vec3 dir) {
     return base * (0.25 + 0.3 * checker);
 }
 
-// ---- the accretion disk ----
+// Accretion disk.
 
-// Colour of a glowing body at a temperature in kelvin, scaled so the brightest channel
-// is 1. A curve fit to the real blackbody colours (Tanner Helland's), good for 1000-40000 K.
+// Blackbody colour for a temperature in kelvin (Tanner Helland's fit, 1000-40000 K).
 vec3 blackbody(float kelvin) {
     float t = clamp(kelvin, 1000.0, 40000.0) / 100.0;
     vec3 color;
@@ -120,20 +114,16 @@ vec3 blackbody(float kelvin) {
     return clamp(color, 0.0, 1.0);
 }
 
-// Temperature across a thin disk, as a fraction of the peak: T ~ r^(-3/4) (1 - sqrt(r_in / r))^(1/4).
-// It is zero at the inner edge and hottest at 49/36 r_in (about 4.1 r_s); 0.4878 is the peak value.
+// Thin-disk temperature relative to the peak: T ~ r^(-3/4) (1 - sqrt(r_in / r))^(1/4).
+// 0.4878 is the peak value, at 49/36 r_in.
 float temperatureProfile(float r) {
     float x = DISK_IN / r;
     return pow(x, 0.75) * pow(1.0 - sqrt(x), 0.25) / 0.4878;
 }
 
-// g = (frequency the camera sees) / (frequency the gas sent). Everything relativistic about
-// the disk's colour is in this one number.
-//   uT    the orbiting gas's clock runs slow: gravity plus its own speed, 1 / sqrt(1 - 1.5 r_s / r)
-//   omega how fast the gas goes round (Kepler): sqrt(r_s / (2 r^3))
-//   ell   the photon's angular momentum about the disk's axis divided by its energy. Both are
-//         conserved along the ray, so the camera end works it out once per pixel.
-//   camF  1 - r_s / r at the camera: the hovering camera's own clock runs slow too.
+// g = observed / emitted frequency.
+// uT: time dilation of the orbiting gas. omega: Kepler angular speed.
+// ell: photon angular momentum / energy (conserved). camF: 1 - r_s/r at the camera.
 float frequencyShift(float r, float ell, float camF) {
     if (u_shiftMode == 0) {
         return 1.0;
@@ -144,22 +134,19 @@ float frequencyShift(float r, float ell, float camF) {
     return 1.0 / (sqrt(camF) * uT * doppler);
 }
 
-// Light given off where a ray crosses the disk: rgb is what the camera sees, a is how
-// much of the ray the gas blocks (1 = opaque).
+// Disk light where a ray crosses it: rgb is the light seen, a is the opacity.
 vec4 diskLight(vec3 p, float ell, float camF) {
     float r = length(p);
     if (r < DISK_IN || r > DISK_OUT) {
         return vec4(0.0);
     }
 
-    // Swirls that orbit at each radius's own speed, so inner rings overtake outer ones.
-    // The gas moves towards -phi (see frequencyShift's sign), so the pattern is sampled at phi + omega t.
+    // swirl pattern that turns at the local orbital speed
     float omega = sqrt(0.5 * RS / (r * r * r));
     float angle = atan(p.z, p.x) + omega * u_time * TIME_SCALE;
     float swirl = clouds(vec3(2.0 * cos(angle), 2.0 * sin(angle), 4.0 * r));
 
-    // A blackbody at temperature T seen with shift g looks like a blackbody at g * T,
-    // and its brightness goes as T^4, so g^4 in all. That's why one side is so much brighter.
+    // seen temperature is g * T, brightness goes as T^4
     float g = frequencyShift(r, ell, camF);
     float seenT = DISK_PEAK_T * temperatureProfile(r) * g;
     float brightness = pow(seenT / DISK_PEAK_T, 4.0) * (0.45 + 1.1 * swirl);
@@ -170,17 +157,17 @@ vec4 diskLight(vec3 p, float ell, float camF) {
     return vec4(light * opacity, opacity);
 }
 
-// Squeezes any brightness into 0..1 with a soft shoulder, like a film camera (ACES fit by K. Narkowicz).
+// ACES tone mapping (Narkowicz fit).
 vec3 toneMap(vec3 c) {
     return clamp(c * (2.51 * c + 0.03) / (c * (2.43 * c + 0.59) + 0.14), 0.0, 1.0);
 }
 
 void main() {
-    // 1. Pixel -> direction (as in step 5).
+    // pixel to ray direction, as in step 5
     vec2 uv = (2.0 * gl_FragCoord.xy - u_resolution) / u_resolution.y;
     vec3 dir = normalize(u_camForward + u_tanHalfFov * (uv.x * u_camRight + uv.y * u_camUp));
 
-    // 2. Hovering-camera correction (as in step 5).
+    // hovering camera correction, as in step 5
     vec3 x = u_camPos;
     vec3 radial = normalize(x);
     float camF = 1.0 - RS / length(x);
@@ -188,16 +175,15 @@ void main() {
     vec3 angular = cross(x, v);
     float h2 = dot(angular, angular);
 
-    // Conserved along the ray: its energy E (from the null condition) and its angular
-    // momentum about the disk's axis. We trace backwards, so the real photon travels
-    // along -v and its angular momentum is -angular.y.
+    // Energy and angular momentum about the disk axis, both conserved. The photon
+    // travels along -v, hence the minus sign.
     float vr = dot(v, radial);
     float energy = sqrt(vr * vr + camF * h2 / dot(x, x));
     float ell = -angular.y / energy;
 
-    // 3. Follow the ray, collecting disk light every time it crosses y = 0.
+    // trace the ray and add disk light at every crossing of y = 0
     vec3 color = vec3(0.0);
-    float transmittance = 1.0;  // how much of the ray hasn't been blocked yet
+    float transmittance = 1.0;  // light not yet blocked by the disk
     bool escaped = false;
     for (int i = 0; i < MAX_STEPS; ++i) {
         float r = length(x);

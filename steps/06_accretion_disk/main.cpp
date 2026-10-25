@@ -1,25 +1,8 @@
-// Step 6 - The accretion disk
-//
-// A thin disk of hot gas orbits the black hole in the y = 0 plane, from the
-// innermost stable circular orbit (3 r_s) out to 12 r_s. Rays from step 5 now
-// check every step whether they crossed that plane, and if so pick up the light
-// the gas gives off there.
-//
-// What the gas looks like depends on three things, all in blackhole.frag:
-//   - its temperature, from the standard thin-disk model (hottest near 4 r_s),
-//   - Doppler shift: it orbits at up to half the speed of light, so the side
-//     coming towards you is bluer and much brighter than the side going away,
-//   - gravitational redshift: light climbing out of the hole loses energy.
-// Press D to switch between them and see what each one does.
-//
-// New compared with step 5: time and colour-mode uniforms, D and Space keys, and a
-// camera that starts further out and just above the disk.
-//
-// Command line: --distance D, --grid, --spin, --mode N (0, 1 or 2), plus demo.hpp's
-// --shot, --record and --clean. For clips:
-//   --tour          the camera follows a 14-second scripted move (loops in the window)
-//   --video folder  renders the tour at 1920x1080, 30 fps, into folder/frame_0000.jpg ...
-//   --no-titles     leaves the titles out of the video
+// Step 6: accretion disk.
+// A thin disk from 3 r_s to 12 r_s with thin-disk temperatures, Doppler shift and
+// gravitational redshift, all in blackhole.frag. D switches the effects on and off.
+// Options: --distance D, --grid, --spin, --mode N (0, 1 or 2), plus demo.hpp's options.
+// Clips: --tour (scripted camera move), --video folder (1080p frames), --no-titles.
 
 #include "demo.hpp"
 
@@ -42,7 +25,7 @@ namespace {
 constexpr float kFovY = 60.f * 3.14159265f / 180.f;
 const std::string kShaderPath = std::string(STEP_DIR) + "/blackhole.frag";
 
-// How the disk's colour is worked out (the u_shiftMode uniform).
+// Names for u_shiftMode.
 const char* const kModeNames[] = {
     "plain colours (no relativity)",
     "+ gravitational redshift",
@@ -52,7 +35,7 @@ const char* const kModeNames[] = {
 struct OrbitCamera {
     float distance = 20.f;
     float azimuth = 0.f;
-    float elevation = 0.1f;  // just above the disk, so it's seen nearly edge-on
+    float elevation = 0.1f;  // just above the disk
 
     sf::Vector3f position() const {
         return {distance * std::cos(elevation) * std::cos(azimuth),
@@ -87,18 +70,16 @@ constexpr float kTourSeconds = 14.f;
 constexpr int kVideoFps = 30;
 const sf::Vector2u kVideoSize{1920, 1080};
 
-// The scripted camera move for clips: glide in from far away while orbiting a little
-// and sinking towards the disk plane, so its far side rises up over the shadow.
+// Camera move for clips: glide in, orbit a little and sink towards the disk.
 void tourCamera(OrbitCamera& camera, float seconds) {
     const float u = std::clamp(seconds / kTourSeconds, 0.f, 1.f);
-    const float eased = u * u * (3.f - 2.f * u);  // smoothstep: starts and stops gently
+    const float eased = u * u * (3.f - 2.f * u);  // smoothstep
     camera.distance = 30.f + (13.f - 30.f) * eased;
     camera.azimuth = -0.5f + 0.8f * u;
     camera.elevation = 0.32f + (0.06f - 0.32f) * eased;
 }
 
-// Titles burned into the video (LinkedIn plays videos muted), over a dark band so
-// they stay readable on top of the bright disk. They fade in during the second second.
+// Video titles over a dark band. They fade in after one second.
 void drawVideoTitles(sf::RenderTarget& target, const sf::Font& font, float seconds) {
     const sf::Vector2f size(target.getSize());
     const float fade = std::clamp(seconds - 1.f, 0.f, 1.f);
@@ -172,8 +153,7 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Video mode renders into an off-screen texture: it can be bigger than the screen,
-    // and every frame is saved from it while the window shows a scaled-down preview.
+    // Video mode renders off screen at 1080p and shows a scaled preview in the window.
     std::optional<sf::RenderTexture> video;
     sf::Font titleFont;
     if (videoDir) {
@@ -187,7 +167,7 @@ int main(int argc, char* argv[]) {
     bool paused = false;
     bool dragging = false;
     sf::Vector2i lastMouse;
-    float simTime = 0.f;  // drives the disk's rotation
+    float simTime = 0.f;  // disk animation time
     sf::Clock frameClock;
     sf::Clock fpsClock;
     int fpsFrames = 0;
@@ -228,7 +208,7 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        // Recordings advance a fixed time per frame, so they play back at the real speed.
+        // fixed time steps when recording
         if (video) {
             if (frame >= static_cast<int>(kTourSeconds) * kVideoFps) {
                 std::printf("Recorded %d frames to %s\n", frame, videoDir->c_str());

@@ -1,17 +1,7 @@
-// Step 5 - The black hole in 3D, on the GPU
-//
-// From here on every pixel is a light ray, traced backwards from the camera into
-// the scene, like the 3D part of the original video. A 1280x720 window has
-// 921,600 pixels, far too many rays to trace on the CPU every frame. So the
-// tracing runs in a fragment shader (blackhole.frag): a small program the GPU
-// runs once per pixel, thousands of pixels at a time.
-//
-// This file only sets the scene up: an orbit camera you drag with the mouse, and
-// a rectangle covering the window that is drawn with the shader. All the physics
-// lives in blackhole.frag.
-//
-// Command line: --distance D (in r_s), --stars, --spin (the camera orbits by itself,
-// for recordings), plus demo.hpp's --shot and --record.
+// Step 5: the black hole in 3D, on the GPU.
+// blackhole.frag traces one light ray per pixel. This file sets up the window, the
+// orbit camera and the shader uniforms.
+// Options: --distance D (in r_s), --stars, --spin, plus demo.hpp's options.
 
 #include "demo.hpp"
 
@@ -32,7 +22,7 @@ namespace {
 constexpr float kFovY = 60.f * 3.14159265f / 180.f;  // vertical field of view
 const std::string kShaderPath = std::string(STEP_DIR) + "/blackhole.frag";
 
-// Circles the black hole at the origin, always looking at it. y is up.
+// Orbits the origin and always looks at it. y is up.
 struct OrbitCamera {
     float distance = 12.f;    // from the centre, in r_s
     float azimuth = 0.f;      // angle around the y axis, radians
@@ -45,8 +35,7 @@ struct OrbitCamera {
     }
 };
 
-// The shader needs to know where the camera is and which way its three axes point:
-// forward (towards the black hole), right and up. Every pixel builds its ray from these.
+// Camera position and axes for the shader.
 void setCameraUniforms(sf::Shader& shader, const OrbitCamera& camera, sf::Vector2u windowSize) {
     const sf::Vector3f position = camera.position();
     const sf::Vector3f forward = (-position).normalized();
@@ -101,12 +90,12 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    // Drawing this rectangle runs the shader once for every pixel it covers: all of them.
+    // full-window rectangle, drawn with the shader
     const sf::RectangleShape screen(sf::Vector2f(window.getSize()));
 
     bool dragging = false;
     sf::Vector2i lastMouse;
-    sf::Clock fpsClock;   // frames per second, averaged over half-second windows
+    sf::Clock fpsClock;   // fps over half-second windows
     int fpsFrames = 0;
     float fps = 0.f;
     const sf::Clock runClock;
