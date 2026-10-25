@@ -15,3 +15,6 @@ find_package(SFML 3 COMPONENTS Graphics REQUIRED)
 add_executable(sfml_test sfml_test.cpp)
 target_link_libraries(sfml_test PRIVATE SFML::Graphics)
 
+# Physics check: the original geodesic.comp equations versus the textbook ones.
+add_executable(shadow_check checks/shadow_check.cpp)
+
