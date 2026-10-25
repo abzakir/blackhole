@@ -455,7 +455,8 @@ function frame(now) {
         fps = windowFrames * 1000 / (now - windowStart);
         windowStart = now;
         windowFrames = 0;
-        if (adaptiveScale) {
+        // Browsers slow down background tabs, which would look like a slow GPU, so only adapt when visible.
+        if (adaptiveScale && !document.hidden) {
             if (fps < 30 && renderScale > 0.3) {
                 renderScale = Math.max(0.3, renderScale * 0.8);
                 fastWindows = 0;
