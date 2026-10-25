@@ -18,3 +18,12 @@ target_link_libraries(sfml_test PRIVATE SFML::Graphics)
 # Physics check: the original geodesic.comp equations versus the textbook ones.
 add_executable(shadow_check checks/shadow_check.cpp)
 
+# Tutorial steps: each one is its own program, built from steps/<name>/main.cpp.
+function(add_step name)
+    add_executable(${name} steps/${name}/main.cpp)
+    target_include_directories(${name} PRIVATE steps/common)
+    target_link_libraries(${name} PRIVATE SFML::Graphics)
+    target_compile_options(${name} PRIVATE -Wall -Wextra)
+endfunction()
+
+add_step(01_straight_rays)
