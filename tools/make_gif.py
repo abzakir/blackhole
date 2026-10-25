@@ -1,6 +1,4 @@
-"""Turns a folder of recorded frames into a GIF for the README.
-
-Record frames with any step's --record mode first, for example:
+"""Makes a GIF from frames recorded with a step's --record option.
 
     build/04_rk4.exe --record build/frames/rk4 --frame 400 --every 4
     python tools/make_gif.py build/frames/rk4 docs/gifs/rk4.gif --width 640 --fps 25
@@ -33,8 +31,7 @@ def main() -> None:
         height = round(image.height * args.width / image.width)
         frames.append(image.resize((args.width, height), Image.Resampling.LANCZOS))
 
-    # A GIF frame can only hold 256 colours. Build one shared palette from a strip of
-    # sample frames, so colours don't flicker from one frame to the next.
+    # One shared 256-colour palette for all frames, so colours don't flicker.
     width, height = frames[0].size
     samples = frames[:: max(1, len(frames) // 8)][:8]
     strip = Image.new("RGB", (width, height * len(samples)))

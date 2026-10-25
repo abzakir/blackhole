@@ -27,7 +27,7 @@
     display: block;
     width: 100vw;
     height: 100vh;
-    touch-action: none;  /* we handle drag and pinch ourselves */
+    touch-action: none;  /* drag and pinch are handled in JS */
     cursor: grab;
   }
   canvas.dragging { cursor: grabbing; }
@@ -107,7 +107,7 @@ void main() {
 }
 </script>
 
-<!-- The same shader as steps/06_accretion_disk/blackhole.frag, in WebGL's GLSL dialect. -->
+<!-- Step 6 shader (steps/06_accretion_disk/blackhole.frag), ported to WebGL. -->
 <script id="fragment-shader" type="x-shader/x-fragment">
 #ifdef GL_FRAGMENT_PRECISION_HIGH
 precision highp float;
@@ -122,7 +122,7 @@ uniform vec3 u_camUp;
 uniform vec3 u_camForward;
 uniform float u_tanHalfFov;
 uniform bool u_showGrid;
-uniform int u_shiftMode;  // 0 plain, 1 + gravitational redshift, 2 + Doppler as well
+uniform int u_shiftMode;  // 0 plain, 1 redshift, 2 redshift + Doppler
 uniform float u_time;
 
 const float RS = 1.0;
@@ -137,8 +137,7 @@ const float DISK_PEAK_T = 4500.0;
 const float EXPOSURE = 0.9;
 const float TIME_SCALE = 4.0;
 
-// Light bending: with h = |x cross v| constant, this pull traces the same paths as the
-// Schwarzschild null geodesic equations.
+// Light bending, same as step 5.
 vec3 acceleration(vec3 x, float h2) {
     float r2 = dot(x, x);
     return -1.5 * RS * h2 * x / (r2 * r2 * sqrt(r2));
@@ -331,7 +330,7 @@ if (!gl) {
     fail("Your browser doesn't support WebGL, which this demo needs.");
 }
 
-// ---- shaders ----
+// Shaders
 
 function compile(type, id) {
     const shader = gl.createShader(type);
@@ -352,7 +351,7 @@ if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
 }
 gl.useProgram(program);
 
-// One triangle big enough to cover the whole screen: the shader runs for every pixel under it.
+// One triangle that covers the whole screen.
 gl.bindBuffer(gl.ARRAY_BUFFER, gl.createBuffer());
 gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 3, -1, -1, 3]), gl.STATIC_DRAW);
 const positionLocation = gl.getAttribLocation(program, "a_position");
@@ -365,7 +364,7 @@ for (const name of ["u_resolution", "u_camPos", "u_camRight", "u_camUp", "u_camF
     uniform[name] = gl.getUniformLocation(program, name);
 }
 
-// ---- state (the URL can set the starting view, e.g. ?distance=14&mode=1&grid) ----
+// State. The URL can set the starting view, e.g. ?distance=14&mode=1&grid
 
 const params = new URLSearchParams(location.search);
 const camera = {
@@ -382,7 +381,7 @@ function clamp(value, low, high) {
     return Math.min(high, Math.max(low, value));
 }
 
-// ---- camera: same maths as steps/06_accretion_disk/main.cpp ----
+// Camera, same as steps/06_accretion_disk/main.cpp
 
 function normalize(v) {
     const length = Math.hypot(v[0], v[1], v[2]);
@@ -408,7 +407,7 @@ function setCameraUniforms() {
     gl.uniform1f(uniform.u_tanHalfFov, Math.tan(FOV_Y / 2));
 }
 
-// ---- resolution: draw fewer pixels on slow GPUs, and let CSS stretch the canvas ----
+// Resolution scale: fewer pixels on slow GPUs, stretched by CSS
 
 const maxPixelRatio = Math.min(window.devicePixelRatio || 1, 1.5);
 let renderScale = params.has("scale") ? clamp(parseFloat(params.get("scale")) || 1, 0.25, 1) : 1;
@@ -426,7 +425,7 @@ function resize() {
 window.addEventListener("resize", resize);
 resize();
 
-// ---- frame loop ----
+// Frame loop
 
 let lastTime = null;
 let windowStart = null;
@@ -447,7 +446,7 @@ function frame(now) {
     gl.uniform1f(uniform.u_time, simTime);
     gl.drawArrays(gl.TRIANGLES, 0, 3);
 
-    // Every half second: measure the frame rate and adjust the resolution if needed.
+    // Every half second, update the fps and adjust the resolution.
     windowFrames++;
     if (windowStart === null) {
         windowStart = now;
@@ -455,14 +454,14 @@ function frame(now) {
         fps = windowFrames * 1000 / (now - windowStart);
         windowStart = now;
         windowFrames = 0;
-        // Browsers slow down background tabs, which would look like a slow GPU, so only adapt when visible.
+        // Background tabs are throttled, so only adapt while visible.
         if (adaptiveScale && !document.hidden) {
             if (fps < 30 && renderScale > 0.3) {
                 renderScale = Math.max(0.3, renderScale * 0.8);
                 fastWindows = 0;
                 resize();
             } else if (fps > 55 && renderScale < 1) {
-                if (++fastWindows >= 4) {  // wait for two steady seconds before trying more pixels
+                if (++fastWindows >= 4) {  // two steady seconds first
                     renderScale = Math.min(1, renderScale * 1.15);
                     fastWindows = 0;
                     resize();
@@ -481,7 +480,7 @@ function updateStatus() {
         `${canvas.width}×${canvas.height} (${Math.round(renderScale * 100)}% resolution)`;
 }
 
-// ---- controls ----
+// Controls
 
 const modeButton = document.getElementById("mode");
 const skyButton = document.getElementById("sky");
@@ -511,7 +510,7 @@ showButton.addEventListener("click", togglePanel);
 
 window.addEventListener("keydown", (event) => {
     if (event.target instanceof HTMLButtonElement && (event.key === " " || event.key === "Enter")) {
-        return;  // let a focused button handle its own activation
+        return;  // the focused button handles it
     }
     const key = event.key.toLowerCase();
     if (key === "d") cycleMode();
@@ -520,7 +519,7 @@ window.addEventListener("keydown", (event) => {
     else if (key === " ") { togglePause(); event.preventDefault(); }
 });
 
-// Drag with one finger or the mouse to orbit, pinch with two fingers to zoom.
+// One pointer orbits, two pointers pinch to zoom.
 const pointers = new Map();
 let pinchDistance = null;
 
@@ -568,7 +567,7 @@ canvas.addEventListener("pointercancel", endPointer);
 
 canvas.addEventListener("wheel", (event) => {
     event.preventDefault();
-    zoom(Math.pow(1.0015, event.deltaY));  // scroll down to move away, up to move closer
+    zoom(Math.pow(1.0015, event.deltaY));  // scroll down zooms out
 }, { passive: false });
 
 refreshButtons();
