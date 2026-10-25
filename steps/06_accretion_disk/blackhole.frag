@@ -25,7 +25,8 @@ const float PI = 3.14159265;
 
 const float DISK_IN = 3.0;        // innermost stable circular orbit: gas inside it falls in
 const float DISK_OUT = 12.0;
-const float DISK_PEAK_T = 7000.0; // kelvin, at the hottest radius (chosen for looks)
+const float DISK_PEAK_T = 5500.0; // kelvin, at the hottest radius (chosen for looks)
+const float EXPOSURE = 0.7;       // overall disk brightness before tone mapping
 const float TIME_SCALE = 4.0;     // speeds up the orbits so you can see them move
 
 // ---- light bending and RK4: unchanged from step 5 ----
@@ -162,7 +163,7 @@ vec4 diskLight(vec3 p, float ell, float camF) {
     float g = frequencyShift(r, ell, camF);
     float seenT = DISK_PEAK_T * temperatureProfile(r) * g;
     float brightness = pow(seenT / DISK_PEAK_T, 4.0) * (0.45 + 1.1 * swirl);
-    vec3 light = blackbody(seenT) * brightness * 2.0;
+    vec3 light = blackbody(seenT) * brightness * EXPOSURE;
 
     float edges = smoothstep(DISK_IN, DISK_IN + 0.3, r) * smoothstep(DISK_OUT, DISK_OUT - 4.0, r);
     float opacity = edges * clamp(0.35 + 0.8 * swirl, 0.0, 1.0);
