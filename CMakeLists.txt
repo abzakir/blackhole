@@ -27,3 +27,4 @@ function(add_step name)
 endfunction()
 
 add_step(01_straight_rays)
+add_step(02_event_horizon)
