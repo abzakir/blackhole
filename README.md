@@ -4,7 +4,7 @@
 
 **A Schwarzschild black hole simulated from scratch in C++ and SFML 3, one small program at a time.**
 
-<img src="docs/gifs/hero.gif" width="600" alt="Orbiting a black hole: the stars and the Milky Way behind it are bent into an Einstein ring">
+<img src="docs/gifs/accretion_disk.gif" width="640" alt="A glowing accretion disk around a black hole, its far side bent up over the shadow">
 
 ![C++17](https://img.shields.io/badge/C%2B%2B-17-00599C?logo=cplusplus&logoColor=white)
 ![SFML 3](https://img.shields.io/badge/SFML-3.0-8CC445)
@@ -38,12 +38,13 @@ next to see exactly what changed.
 | <img src="docs/images/step3.png" width="280"> | **[3. Bending light](steps/03_bending_light/main.cpp)**<br>Gravity curves every ray. | Schwarzschild geodesic equations, Euler's method |
 | <img src="docs/images/step4.png" width="280"> | **[4. RK4](steps/04_rk4/main.cpp)**<br>Gold = RK4, blue = Euler, white = a ray caught on the photon sphere. | Runge-Kutta 4, the photon sphere |
 | <img src="docs/images/step5_stars.png" width="280"> | **[5. 3D on the GPU](steps/05_shadow_3d)**<br>One light ray per pixel, 921,600 of them every frame. | Fragment shader ray tracer, orbit camera, starfield |
+| <img src="docs/images/step6.png" width="280"> | **[6. Accretion disk](steps/06_accretion_disk)**<br>Hot gas orbiting at up to half the speed of light. | Thin-disk temperatures, Doppler shift, gravitational redshift |
 
 ### Roadmap
 
 - [x] 1-4: light bending in 2D
 - [x] 5: 3D black hole on the GPU
-- [ ] 6: accretion disk (in progress)
+- [x] 6: accretion disk
 - [ ] 7: stars and planets as real objects
 - [ ] 8: objects moving under gravity
 - [ ] 9: the curved-space grid
@@ -111,6 +112,8 @@ The white ray starts $10^{-9}\,r_s$ outside that critical distance. It circles t
 
 <br>
 
+<img src="docs/gifs/step5_stars.gif" width="560" alt="Orbiting the black hole: stars and the Milky Way bent into an Einstein ring">
+
 <img src="docs/gifs/lensing_grid.gif" width="560" alt="A checkerboard sky distorted by the black hole">
 
 Tracing 921,600 rays every frame is too much for a CPU, so it runs in a fragment shader:
@@ -130,15 +133,51 @@ the hole more than once.
 
 </details>
 
+<details>
+<summary><b>Step 6: why one side of the disk is brighter</b></summary>
+
+<br>
+
+The disk is a thin sheet of gas in the y = 0 plane, from 3 $r_s$ to 12 $r_s$. 3 $r_s$ is the innermost
+stable circular orbit: closer in, gas can't stay in orbit and plunges into the hole. After every RK4 step
+the ray checks whether it crossed the plane, and if so it picks up the light given off there.
+
+**Temperature.** In the standard thin-disk model the gas is hottest a little outside the inner edge
+(about 4.1 $r_s$) and cools further out:
+
+$$T(r) \propto r^{-3/4}\left(1 - \sqrt{r_\text{in}/r}\right)^{1/4}$$
+
+**Shift.** What the camera sees differs from what the gas sends out by one factor:
+
+$$g = \frac{\nu_\text{seen}}{\nu_\text{sent}} = \frac{1}{\sqrt{1 - r_s/r_\text{cam}}\;\, u^t\,(1 - \Omega\,\ell)}, \qquad u^t = \frac{1}{\sqrt{1 - \tfrac32 r_s/r}}, \qquad \Omega = \sqrt{\frac{r_s}{2r^3}}$$
+
+$u^t$ is how slowly the orbiting gas's clock runs (gravity plus its own speed), $\Omega$ is its orbital
+speed, and $\ell$ is the photon's angular momentum per unit energy, which stays the same along the whole
+ray. A blackbody at temperature $T$ seen with shift $g$ looks like a blackbody at $gT$, and its brightness
+goes as $T^4$, so as $g^4$ in all. Press **D** to switch the effects on one at a time:
+
+| Plain colours | + gravitational redshift | + Doppler |
+|:---:|:---:|:---:|
+| <img src="docs/images/step6_mode0.png" width="260"> | <img src="docs/images/step6_mode1.png" width="260"> | <img src="docs/images/step6_mode2.png" width="260"> |
+| no relativity | light loses energy climbing out | gas coming towards us is ~7× brighter |
+
+The disk's far side shows up bent over the top of the shadow, and its underside wraps round below. The
+temperature scale (4500 K at the peak) is picked so it looks good on screen. The shape of the profile and
+the shift are physical.
+
+</details>
+
 ## How a pixel becomes a black hole
 
 ```mermaid
-flowchart LR
-    A["Pixel"] --> B["Ray direction from the<br>camera's forward, right, up"]
+flowchart TD
+    A["Pixel"] --> B["Ray direction from the camera's forward, right, up"]
     B --> C["Correct for the hovering camera<br>(space is stretched along r)"]
     C --> D{"RK4 step<br>(5% of the distance)"}
     D -- "r < r_s" --> E["Black: fell in"]
-    D -- "far away, heading out" --> F["Colour of the sky<br>it points at"]
+    D -- "crossed the disk" --> G["Add the disk's light,<br>shifted by g"]
+    G -- "gas is see-through here" --> D
+    D -- "far away, heading out" --> F["Add the colour of the sky it points at"]
     D -- "otherwise" --> D
 ```
 
@@ -175,7 +214,7 @@ from 5 $r_s$ (theory: 327.3 px).
 |---|---|---|
 | Resolution | 200 × 150 (30,000 rays) | 1280 × 720 (921,600 rays) |
 | Steps per ray | fixed 60,000 | a few hundred, adaptive |
-| Frame rate | not measured | 206-244 fps (RTX 4060 Laptop) |
+| Frame rate | not measured | 206-244 fps (RTX 4060 Laptop), with the disk too |
 
 On a laptop with two GPUs, Windows puts OpenGL programs on the slow built-in chip by default (about
 12 fps here). [`use_fast_gpu.cpp`](steps/common/use_fast_gpu.cpp) asks the driver for the dedicated one.
@@ -200,8 +239,9 @@ build/05_shadow_3d.exe
 | 2 | **G** polar grid · hover to read r and φ |
 | 4 | **E** show/hide Euler · **O** fire the orbiting ray |
 | 5 | **Drag** orbit · **Scroll** zoom · **G** checkerboard / stars · **F5** reload the shader |
+| 6 | Same as 5, plus **D** colour mode · **Space** pause the disk |
 
-Editing `blackhole.frag` doesn't need a rebuild: change something and press F5.
+Editing a step's `blackhole.frag` doesn't need a rebuild: change something and press F5.
 
 <details>
 <summary><b>Screenshots, recordings and GIFs</b></summary>
@@ -216,8 +256,8 @@ build/05_shadow_3d.exe --stars --spin --clean --record build/frames/hero --frame
 python tools/make_gif.py build/frames/hero hero.gif --width 600 --fps 14 --skip 2 --no-dither
 ```
 
-`--clean` hides the captions, `--spin` makes the step 5 camera orbit by itself, and `--distance D`
-starts it D Schwarzschild radii away.
+`--clean` hides the captions, `--spin` makes the 3D camera orbit by itself, and `--distance D`
+starts it D Schwarzschild radii away. Step 6 also takes `--mode 0|1|2` and `--grid`.
 
 </details>
 
@@ -226,7 +266,7 @@ starts it D Schwarzschild radii away.
 ```
 steps/
   common/            window, captions, screenshots, GPU selection (shared by every step)
-  01_straight_rays/  ... 05_shadow_3d/    one program per step
+  01_straight_rays/  ... 06_accretion_disk/    one program per step
 checks/
   shadow_check.cpp   original shader physics vs the textbook
 tools/
