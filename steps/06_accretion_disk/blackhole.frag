@@ -25,8 +25,8 @@ const float PI = 3.14159265;
 
 const float DISK_IN = 3.0;        // innermost stable circular orbit: gas inside it falls in
 const float DISK_OUT = 12.0;
-const float DISK_PEAK_T = 5500.0; // kelvin, at the hottest radius (chosen for looks)
-const float EXPOSURE = 0.7;       // overall disk brightness before tone mapping
+const float DISK_PEAK_T = 4500.0; // kelvin, at the hottest radius (chosen for looks)
+const float EXPOSURE = 0.9;       // overall disk brightness before tone mapping
 const float TIME_SCALE = 4.0;     // speeds up the orbits so you can see them move
 
 // ---- light bending and RK4: unchanged from step 5 ----
