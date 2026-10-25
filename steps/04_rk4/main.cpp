@@ -1,16 +1,7 @@
-// Step 4 - Runge-Kutta 4 (RK4)
-//
-// Euler's method follows the slope at the start of each step, so on a curved
-// path it cuts corners. RK4 samples the slope four times (start, two midpoints,
-// end) and averages them with weights 1-2-2-1, which is far more accurate for
-// the same step size. Both run side by side: gold = RK4, blue = Euler.
-//
-// The white ray starts at exactly the critical distance from the centre line, so
-// it gets caught on the photon sphere and circles the black hole a few times
-// before escaping, like the orbiting ray in the original video.
-//
-// New compared with step 3: State arithmetic (+ and *), rk4Step(), a Method per
-// ray, sub-steps for the orbiting ray, and criticalHeight().
+// Step 4: RK4 vs Euler.
+// Gold rays use RK4, blue rays use Euler, with the same step size. The white ray
+// starts at the critical distance and circles the photon sphere a few times before
+// escaping.
 
 #include "demo.hpp"
 
@@ -42,7 +33,6 @@ struct State {
     double dr, dphi;
 };
 
-// Lets RK4 below be written exactly like the formula on paper.
 State operator+(const State& a, const State& b) {
     return {a.r + b.r, a.phi + b.phi, a.dr + b.dr, a.dphi + b.dphi};
 }
@@ -65,13 +55,12 @@ State geodesic(const State& s, double E) {
     return d;
 }
 
-// Euler: one slope, taken at the start of the step.
+// Euler: one slope per step.
 State eulerStep(const State& s, double E, double h) {
     return s + geodesic(s, E) * h;
 }
 
-// RK4: four slopes. k1 at the start, k2 and k3 at the midpoint (each using the
-// previous estimate), k4 at the end. The middle two count double.
+// RK4: slopes at the start, twice at the midpoint and at the end, weighted 1-2-2-1.
 State rk4Step(const State& s, double E, double h) {
     const State k1 = geodesic(s, E);
     const State k2 = geodesic(s + k1 * (h / 2.0), E);
@@ -86,13 +75,12 @@ struct Ray {
     State state{};
     double energy = 0.0;
     Method method;
-    int substeps;  // smaller steps for rays that need extra accuracy
+    int substeps;  // smaller steps per update
     std::deque<sf::Vector2f> trail;
     bool active = true;
     bool fellIn = false;
 
-    // Doubles here (not sf::Vector2f) because the orbiting ray needs its start
-    // height to about 9 decimal places.
+    // Takes doubles because the orbiting ray needs a very precise start height.
     Ray(double x, double y, double dirX, double dirY, Method method, int substeps = 1)
         : method(method), substeps(substeps) {
         state.r = std::hypot(x, y);
@@ -107,8 +95,7 @@ struct Ray {
     void update() {
         const double h = kStep / substeps;
         for (int i = 0; i < substeps; ++i) {
-            // Same horizon rule as step 3. It matters more here: RK4 samples the
-            // equations halfway through the step, and a sample at f = 0 blows up.
+            // same horizon check as step 3, RK4 would otherwise sample f = 0 mid-step
             if (state.r + state.dr * h <= kRs) {
                 fallIn();
                 break;
@@ -140,11 +127,8 @@ struct Ray {
     }
 };
 
-// Light passing the hole at impact parameter b = 3*sqrt(3)/2 r_s (about 2.6 r_s)
-// spirals onto the photon sphere: any closer it falls in, any farther it escapes.
-// b = L / E, and for a ray starting at (x0, y) heading +x, L = y and
-// E = sqrt(x0^2 + f*y^2) / r. Solving b(y) = critical b by repeated substitution
-// gives the start height.
+// Start height for a ray from x0 with the critical impact parameter b = 3*sqrt(3)/2 r_s.
+// b = L / E with L = y and E = sqrt(x0^2 + f*y^2) / r, solved by repeated substitution.
 double criticalHeight(double x0) {
     const double critical = 1.5 * std::sqrt(3.0) * kRs;
     double y = critical;
@@ -164,8 +148,7 @@ std::vector<Ray> makeRays(Method method) {
     return rays;
 }
 
-// A hair outside the critical height (1e-9 r_s), with 50x smaller steps so that
-// numerical error doesn't knock it off the photon sphere early.
+// 1e-9 r_s outside the critical height, with 50 substeps for accuracy.
 Ray makeOrbitRay() {
     return Ray(kStartX, criticalHeight(kStartX) + 1e-9, 1.0, 0.0, Method::RK4, 50);
 }

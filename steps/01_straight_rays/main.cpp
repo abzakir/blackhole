@@ -1,11 +1,6 @@
-// Step 1 - Straight light rays
-//
-// No physics yet. A column of light rays flies left to right in straight lines,
-// leaving fading trails, and passes right through the black hole. This step sets
-// up what every later step reuses: the window, the main loop, and drawing trails
-// with a vertex array.
-//
-// Units: 1 world unit = 1 Schwarzschild radius (r_s), and light moves at c = 1.
+// Step 1: straight light rays.
+// No gravity yet, the rays fly left to right straight through the black hole.
+// Units: 1 = one Schwarzschild radius (r_s), speed of light c = 1.
 
 #include "demo.hpp"
 
@@ -28,7 +23,7 @@ const sf::Color kLight(255, 190, 90);
 
 struct Ray {
     sf::Vector2f position;
-    sf::Vector2f direction;  // unit length, so the ray moves at c = 1
+    sf::Vector2f direction;  // unit length
     std::deque<sf::Vector2f> trail;
     bool active = true;
 
@@ -46,7 +41,7 @@ struct Ray {
     }
 };
 
-// A column of parallel rays at the left edge, all heading right.
+// Column of parallel rays on the left, heading right.
 std::vector<Ray> makeRays() {
     std::vector<Ray> rays;
     for (int i = 0; i <= 64; ++i) {
@@ -56,15 +51,14 @@ std::vector<Ray> makeRays() {
     return rays;
 }
 
-// Draws a trail as one connected line that fades from invisible at the tail to
-// full brightness at the head.
+// Trail as one line that fades out towards the tail.
 void drawTrail(sf::RenderTarget& target, const std::deque<sf::Vector2f>& trail, sf::Color color) {
     sf::VertexArray line(sf::PrimitiveType::LineStrip, trail.size());
     for (std::size_t i = 0; i < trail.size(); ++i) {
         color.a = static_cast<std::uint8_t>(255.f * static_cast<float>(i + 1) / static_cast<float>(trail.size()));
         line[i] = sf::Vertex{trail[i], color};
     }
-    target.draw(line, sf::BlendAdd);  // additive blending: overlapping light adds up and glows
+    target.draw(line, sf::BlendAdd);  // additive, so overlapping light adds up
 }
 
 void drawHead(sf::RenderTarget& target, sf::Vector2f position) {
@@ -75,7 +69,6 @@ void drawHead(sf::RenderTarget& target, sf::Vector2f position) {
     target.draw(dot);
 }
 
-// SFML has a ready-made circle, so unlike raw OpenGL there is no circle maths to write.
 void drawBlackHole(sf::RenderTarget& target) {
     sf::CircleShape horizon(kHorizon, 128);
     horizon.setOrigin({kHorizon, kHorizon});
@@ -120,7 +113,7 @@ int main(int argc, char* argv[]) {
         }
 
         window.clear(kBackground);
-        drawBlackHole(window);  // drawn first, so the rays visibly cross it
+        drawBlackHole(window);  // drawn first so the rays pass over it
         for (const Ray& ray : rays) {
             drawTrail(window, ray.trail, kLight);
             if (ray.active) drawHead(window, ray.position);

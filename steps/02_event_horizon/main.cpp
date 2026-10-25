@@ -1,12 +1,6 @@
-// Step 2 - The event horizon and polar coordinates
-//
-// Rays still fly straight, but now each one knows where it is relative to the
-// black hole in polar coordinates: r (distance from the centre) and phi (angle
-// from the +x axis). Once r drops below the Schwarzschild radius the ray has
-// crossed the event horizon and stops: nothing comes back out.
-//
-// New compared with step 1: Ray::r and Ray::phi, the horizon check in
-// Ray::update(), a polar grid (G) and a mouse read-out of r and phi.
+// Step 2: event horizon and polar coordinates.
+// Each ray tracks r and phi around the black hole and stops once r <= r_s.
+// G toggles a polar grid, and the mouse shows r and phi.
 
 #include "demo.hpp"
 
@@ -42,11 +36,11 @@ struct Ray {
     Ray(sf::Vector2f position, sf::Vector2f direction) : position(position), direction(direction) {}
 
     void update() {
-        // Polar coordinates centred on the black hole. hypot(x, y) = sqrt(x*x + y*y).
+        // polar coordinates around the black hole
         r = std::hypot(position.x, position.y);
         phi = std::atan2(position.y, position.x);
 
-        if (r <= kHorizon) {  // inside the event horizon: this light can never leave
+        if (r <= kHorizon) {  // inside the event horizon
             active = false;
             return;
         }
@@ -98,7 +92,7 @@ void drawBlackHole(sf::RenderTarget& target) {
     target.draw(horizon);
 }
 
-// Circles of constant r (every 1 r_s) and lines of constant phi (every 15 degrees).
+// Polar grid: a circle every 1 r_s and a line every 15 degrees.
 void drawPolarGrid(sf::RenderTarget& target) {
     const sf::Color color(120, 140, 255, 30);
     sf::VertexArray lines(sf::PrimitiveType::Lines);
@@ -164,9 +158,9 @@ int main(int argc, char* argv[]) {
             drawTrail(window, ray.trail, kLight);
             if (ray.active) drawHead(window, ray.position);
         }
-        drawBlackHole(window);  // drawn last, so it covers the bit of a ray's last step inside it
+        drawBlackHole(window);  // drawn last, it hides the last step inside the horizon
 
-        // Hover the mouse anywhere to see that point in polar coordinates.
+        // r and phi under the mouse
         const sf::Vector2i mousePixel = sf::Mouse::getPosition(window);
         const sf::Vector2u size = window.getSize();
         if (mousePixel.x >= 0 && mousePixel.y >= 0 && mousePixel.x < int(size.x) && mousePixel.y < int(size.y)) {

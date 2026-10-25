@@ -1,15 +1,6 @@
-// Step 3 - Bending light (Euler's method)
-//
-// Gravity arrives. Each ray now follows a null geodesic of the Schwarzschild
-// metric: the straightest possible path for light through the curved spacetime
-// around a non-spinning black hole. The geodesic equations give the ray's
-// acceleration in polar coordinates, and Euler's method turns that into motion:
-//     velocity += acceleration * step,   position += velocity * step.
-//
-// New compared with step 2: a ray stores its polar position AND velocity
-// (r, phi, dr, dphi) plus its energy E, geodesic() holds the physics, and the
-// photon sphere at 1.5 r_s is drawn. Physics uses double precision: it is free on
-// the CPU and matters for rays that skim the photon sphere.
+// Step 3: light bends around the black hole.
+// Rays follow the Schwarzschild geodesic equations, moved with Euler's method.
+// The faint ring is the photon sphere at 1.5 r_s.
 
 #include "demo.hpp"
 
@@ -25,7 +16,7 @@
 namespace {
 
 constexpr double kRs = 1.0;                // Schwarzschild radius (event horizon)
-constexpr double kStep = 0.1;              // step size in lambda, the ray's "clock"
+constexpr double kStep = 0.1;              // step size in lambda
 constexpr int kStepsPerFrame = 2;
 constexpr double kEscape = 20.0;           // past every edge of the screen
 constexpr std::size_t kTrailLength = 800;
@@ -33,30 +24,28 @@ constexpr std::size_t kTrailLength = 800;
 const sf::Color kBackground(6, 7, 12);
 const sf::Color kLight(255, 190, 90);
 
-// A light ray's position and velocity in polar coordinates around the black hole.
-// geodesic() returns the same structure, filled with rates of change instead.
+// Ray state in polar coordinates. geodesic() returns its derivative in the same struct.
 struct State {
-    double r, phi;    // position: distance from the centre and angle
-    double dr, dphi;  // velocity: dr/dlambda and dphi/dlambda
+    double r, phi;    // position
+    double dr, dphi;  // velocity
 };
 
-// The geodesic equations for light moving in a plane around a Schwarzschild black
-// hole (theta = 90 degrees). E is the ray's energy, which stays constant along it.
+// Geodesic equations for light in the equatorial plane. E is the ray's energy (constant).
 State geodesic(const State& s, double E) {
     const double r = s.r;
     const double f = 1.0 - kRs / r;  // 1 far away, 0 at the horizon
-    const double dtdl = E / f;       // dt/dlambda: clocks near the hole run slow
+    const double dtdl = E / f;       // dt/dlambda
     State d;
     d.r = s.dr;
     d.phi = s.dphi;
-    d.dr = -(kRs / (2.0 * r * r)) * f * dtdl * dtdl     // gravity pulls the ray in
-         + (kRs / (2.0 * r * r * f)) * s.dr * s.dr      // correction for moving along r
-         + (r - kRs) * s.dphi * s.dphi;                 // moving sideways pushes it outward
-    d.dphi = -2.0 * s.dr * s.dphi / r;                  // closer in, it swings round faster
+    d.dr = -(kRs / (2.0 * r * r)) * f * dtdl * dtdl     // gravity
+         + (kRs / (2.0 * r * r * f)) * s.dr * s.dr      // radial term
+         + (r - kRs) * s.dphi * s.dphi;                 // sideways motion
+    d.dphi = -2.0 * s.dr * s.dphi / r;
     return d;
 }
 
-// Euler's method: take the slope at the start of the step and follow it in a straight line.
+// Euler step: use the slope at the start of the step.
 void eulerStep(State& s, double E, double h) {
     const State d = geodesic(s, E);
     s.r += d.r * h;
@@ -72,32 +61,30 @@ struct Ray {
     bool active = true;
     bool fellIn = false;
 
-    // Starts a ray at a point, heading in a unit direction (both given in x, y).
+    // Starts at a point with a unit direction, both in x, y.
     Ray(sf::Vector2f position, sf::Vector2f direction) {
         const double x = position.x, y = position.y;
         state.r = std::hypot(x, y);
         state.phi = std::atan2(y, x);
-        // Split the direction into "away from the hole" and "around the hole".
+        // radial and angular velocity
         state.dr = (x * direction.x + y * direction.y) / state.r;
         state.dphi = (x * direction.y - y * direction.x) / (state.r * state.r);
-        // Light travels on a null path (ds^2 = 0), and that fixes its energy.
+        // energy from the null condition ds^2 = 0
         const double f = 1.0 - kRs / state.r;
         energy = std::sqrt(state.dr * state.dr + f * state.r * state.r * state.dphi * state.dphi);
         trail.push_back(position);
     }
 
     void update() {
-        // The equations divide by f = 1 - r_s/r, which is 0 at the horizon: these
-        // coordinates break down there, even though nothing physical happens. So a ray
-        // that would reach the horizon within this step falls in before we evaluate the
-        // equations there. That is safe: light this close and moving inward can't escape.
+        // The equations divide by zero at the horizon, so stop a ray that would reach it
+        // this step. It can't escape from there anyway.
         if (state.r + state.dr * kStep <= kRs) {
             fallIn();
         } else {
             eulerStep(state, energy, kStep);
-            if (!(state.r > kRs)) {  // slipped through anyway (the "!" form also catches NaN)
+            if (!(state.r > kRs)) {  // also catches NaN
                 fallIn();
-            } else if (state.r > kEscape && state.dr > 0.0) {  // far away and still leaving
+            } else if (state.r > kEscape && state.dr > 0.0) {  // escaped
                 active = false;
             }
         }
@@ -113,7 +100,6 @@ struct Ray {
         fellIn = true;
     }
 
-    // Back from polar to x, y for drawing.
     sf::Vector2f position() const {
         return {static_cast<float>(state.r * std::cos(state.phi)),
                 static_cast<float>(state.r * std::sin(state.phi))};
@@ -156,7 +142,7 @@ void drawBlackHole(sf::RenderTarget& target) {
     target.draw(horizon);
 }
 
-// The photon sphere: the one distance where light can circle the black hole.
+// Photon sphere at 1.5 r_s.
 void drawPhotonSphere(sf::RenderTarget& target) {
     const float radius = 1.5f * static_cast<float>(kRs);
     sf::CircleShape ring(radius, 128);
