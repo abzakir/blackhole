@@ -1,6 +1,4 @@
-// demo.hpp - helpers shared by every step: opening the window, caption text,
-// and the --shot screenshot mode. They live here so each step's main.cpp only
-// contains the black hole code itself.
+// Shared helpers for all steps: window, captions, screenshots and frame recording.
 #pragma once
 
 #include <SFML/Graphics.hpp>
@@ -16,15 +14,14 @@
 
 namespace demo {
 
-// Command-line options every step understands:
-//   --shot file.png    save one frame to a PNG and quit
-//   --record folder    save every few frames as folder/frame_0000.png and so on (for GIFs)
-//   --frame N          the frame to save, or the last one to record (default 300)
-//   --every K          with --record, save every K-th frame (default 2)
-//   --clean            no caption text, for good-looking recordings
+// Command-line options:
+//   --shot file.png   save one frame and quit
+//   --record folder   save frames as folder/frame_0000.png, ...
+//   --frame N         frame to save, or last frame to record (default 300)
+//   --every K         with --record, save every K-th frame (default 2)
+//   --clean           hide the captions
 
-// Set by --clean. Checked by Caption, so the steps don't need to pass it around.
-inline bool hideCaptions = false;
+inline bool hideCaptions = false;  // set by --clean
 
 struct Options {
     std::optional<std::string> shotPath;
@@ -60,7 +57,7 @@ inline Options parseOptions(int argc, char* argv[]) {
     return options;
 }
 
-// A 1280x720 window with anti-aliasing. When saving frames it runs as fast as it can.
+// 1280x720 window with anti-aliasing. No frame limit while saving frames.
 inline void openWindow(sf::RenderWindow& window, const std::string& title, const Options& options) {
     sf::ContextSettings settings;
     settings.antiAliasingLevel = 8;
@@ -69,22 +66,19 @@ inline void openWindow(sf::RenderWindow& window, const std::string& title, const
     window.setFramerateLimit(options.offline() ? 0 : 60);
 }
 
-// Saves what has been drawn so far. Call it before display(): after the buffer swap the
-// back buffer's contents are undefined.
+// Call before display(), the back buffer is undefined after it.
 inline bool saveFrame(const sf::RenderWindow& window, const std::string& path) {
     sf::Texture texture(window.getSize());
     texture.update(window);
     return texture.copyToImage().saveToFile(path);
 }
 
-// The 2D world: 32 x 18 Schwarzschild radii centred on the black hole (40 px per r_s).
-// The negative height flips the y axis so +y points up, like in maths class.
+// 32 x 18 r_s centred on the black hole. The negative height makes +y point up.
 inline sf::View worldView() {
     return sf::View({0.f, 0.f}, {32.f, -18.f});
 }
 
-// Shows the finished frame, saving it first if --shot or --record asks for it. The
-// window closes after the last frame to save.
+// Saves the frame if asked to, shows it, and closes the window after the last saved frame.
 inline void present(sf::RenderWindow& window, const Options& options, int frame) {
     if (options.shotPath && frame == options.shotFrame && saveFrame(window, *options.shotPath)) {
         std::cout << "Saved " << *options.shotPath << '\n';
@@ -104,7 +98,7 @@ inline void present(sf::RenderWindow& window, const Options& options, int frame)
     }
 }
 
-// Screen-space text: a title, a line of hints, and small labels pinned to world points.
+// Title, hint line and small labels, drawn in screen space.
 class Caption {
 public:
     Caption() {
@@ -122,7 +116,7 @@ public:
         text(window, hints, {20.f, 48.f}, 16, sf::Color(130, 132, 150));
     }
 
-    // A small label just above and to the right of a point in world coordinates.
+    // Small label next to a point in world coordinates.
     void label(sf::RenderWindow& window, sf::Vector2f world, const std::string& string) const {
         const sf::Vector2f pixel(window.mapCoordsToPixel(world));
         text(window, string, pixel + sf::Vector2f(8.f, -22.f), 14, sf::Color(160, 162, 180));

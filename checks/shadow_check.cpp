@@ -1,12 +1,6 @@
-// shadow_check.cpp - numerical check of the original geodesic.comp physics.
-//
-// Shoots light rays from a camera at r = 5 r_s (the original's starting distance)
-// toward the black hole and finds the edge of its shadow: the angle off the line
-// of sight below which rays fall in and above which they escape. Compares the
-// textbook Schwarzschild equations with the two mistakes found in geodesic.comp.
-//
-// Units: r_s = 1 and c = 1. Rays stay in the equatorial plane (theta = pi/2),
-// which loses nothing because the black hole is spherically symmetric.
+// Compares the light-bending equations from the original geodesic.comp with the
+// textbook Schwarzschild ones, by finding the edge of the shadow seen from r = 5 r_s.
+// Units: r_s = 1, c = 1. Rays stay in the equatorial plane.
 
 #include <cmath>
 #include <cstdio>
@@ -15,16 +9,16 @@ namespace {
 
 constexpr double kPi = 3.14159265358979323846;
 
-// Position (r, phi) and velocity (dr, dphi) along the ray, per unit affine parameter lambda.
+// Ray position (r, phi) and velocity (dr, dphi).
 struct State {
     double r, phi, dr, dphi;
 };
 
 struct Variant {
     const char* name;
-    bool originalEnergy;  // E as in initRay: the "/ f" under the square root is missing
-    bool originalRForce;  // r'' uses r * dphi^2 instead of (r - r_s) * dphi^2
-    bool euler;           // one Euler step per iteration, as geodesic.comp's rk4Step really does
+    bool originalEnergy;  // energy formula from the original initRay (missing / f)
+    bool originalRForce;  // r'' uses r instead of (r - r_s)
+    bool euler;           // single Euler step, like the original rk4Step
     double step;
     long maxSteps;
 };
@@ -33,7 +27,7 @@ State add(const State& s, const State& d, double h) {
     return {s.r + h * d.r, s.phi + h * d.phi, s.dr + h * d.dr, s.dphi + h * d.dphi};
 }
 
-// Right-hand side of the geodesic equations: d/dlambda of every state component.
+// Geodesic equations: the derivative of each state value.
 State derivatives(const State& s, double E, const Variant& v) {
     const double r = s.r;
     const double f = 1.0 - 1.0 / r;
@@ -47,7 +41,7 @@ State derivatives(const State& s, double E, const Variant& v) {
     };
 }
 
-// True if a ray leaving r0 at angle alpha from the inward direction falls through the horizon.
+// True if a ray from r0, at angle alpha from the inward direction, falls in.
 bool falls_in(double alpha, double r0, const Variant& v) {
     State s{r0, 0.0, -std::cos(alpha), std::sin(alpha) / r0};
     const double f = 1.0 - 1.0 / r0;
@@ -80,10 +74,10 @@ bool falls_in(double alpha, double r0, const Variant& v) {
     return false;
 }
 
-// Bisects for the shadow edge, in degrees from the line of sight.
+// Finds the shadow edge by bisection, in degrees from the line of sight.
 double shadow_edge_deg(double r0, const Variant& v) {
-    double inside = 0.0;      // straight at the hole: falls in
-    double outside = kPi / 2; // sideways: escapes
+    double inside = 0.0;      // aimed at the hole: falls in
+    double outside = kPi / 2; // aimed sideways: escapes
     for (int i = 0; i < 40; ++i) {
         const double mid = 0.5 * (inside + outside);
         (falls_in(mid, r0, v) ? inside : outside) = mid;
@@ -96,7 +90,7 @@ double shadow_edge_deg(double r0, const Variant& v) {
 int main() {
     const double r0 = 5.0;
     const double originalStep = 1e7 / 1.269e10;  // D_LAMBDA / SagA_rs from geodesic.comp
-    const double halfFov = 30.0;                 // the original's 60 degree vertical field of view
+    const double halfFov = 30.0;                 // 60 degree vertical field of view
 
     const Variant variants[] = {
         {"Textbook equations, RK4",              false, false, false, 1e-3, 2000000},
@@ -107,10 +101,9 @@ int main() {
         {"Exactly geodesic.comp",                true,  true,  true,  originalStep, 60000},
     };
 
-    // Exact answer: rays with impact parameter below b = (3*sqrt(3)/2) r_s are captured.
-    // An observer standing still at r0 sees that edge at sin(a) = b * sqrt(f) / r0.
-    // Like initRay, falls_in() aims rays with flat-space directions (dr = -cos a, r*dphi = sin a),
-    // and in that convention the same edge sits at tan(a') = tan(a) / sqrt(f).
+    // Exact edge: impact parameter b = 3*sqrt(3)/2 r_s. A static observer sees it at
+    // sin(a) = b * sqrt(f) / r0. falls_in() aims rays in flat-space directions, like
+    // initRay, where the same edge is at tan(a') = tan(a) / sqrt(f).
     const double f0 = 1.0 - 1.0 / r0;
     const double observed = std::asin(1.5 * std::sqrt(3.0) * std::sqrt(f0) / r0);
     const double flatAim = std::atan(std::tan(observed) / std::sqrt(f0));

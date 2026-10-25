@@ -1,7 +1,5 @@
-// sfml_test.cpp - smoke test for the toolchain.
-// Opens a window, draws a glowing ring with a fragment shader (the same GPU
-// technique the 3D black hole will use) and a black circle on top of it.
-// Run with --auto to close after 2 seconds and save a screenshot.
+// Checks that SFML, OpenGL and shaders work.
+// --auto saves a screenshot after 2 seconds and quits.
 
 #include <SFML/Graphics.hpp>
 
@@ -11,18 +9,17 @@
 
 namespace {
 
-// A GLSL program that the GPU runs once for every pixel it draws.
 constexpr std::string_view kRingShader = R"(
 #version 120
 uniform vec2 u_resolution;
 uniform float u_time;
 
 void main() {
-    // Centre the coordinates and scale them so the screen height spans -0.5..0.5.
+    // centred coordinates, screen height = 1
     vec2 uv = (gl_FragCoord.xy - 0.5 * u_resolution) / u_resolution.y;
     float r = length(uv);
 
-    // Gaussian bump around r = 0.22: a soft glowing ring that pulses slowly.
+    // soft ring at r = 0.22 that pulses
     float ring = exp(-pow((r - 0.22) * 18.0, 2.0));
     float pulse = 0.85 + 0.15 * sin(u_time * 2.0);
     vec3 color = vec3(1.0, 0.55, 0.15) * ring * pulse;
@@ -55,11 +52,11 @@ int main(int argc, char* argv[]) {
     }
     std::cout << "Fragment shader compiled OK\n";
 
-    // A rectangle covering the whole window: the shader colours every pixel of it.
+    // full-window rectangle drawn with the shader
     const sf::Vector2f size(window.getSize());
     sf::RectangleShape screen(size);
 
-    // The "event horizon", drawn as a plain SFML circle on top of the glow.
+    // black circle on top
     const float radius = 0.18f * size.y;
     sf::CircleShape horizon(radius, 128);
     horizon.setOrigin({radius, radius});
@@ -84,7 +81,7 @@ int main(int argc, char* argv[]) {
         window.draw(screen, &shader);
         window.draw(horizon);
 
-        // Capture before display(): after the buffer swap the back buffer is undefined.
+        // capture before display()
         const bool done = autoClose && clock.getElapsedTime() > sf::seconds(2);
         if (done) {
             sf::Texture capture(window.getSize());
