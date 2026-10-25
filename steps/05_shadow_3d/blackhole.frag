@@ -15,7 +15,7 @@ uniform vec3 u_camRight;     // camera axes, unit length
 uniform vec3 u_camUp;
 uniform vec3 u_camForward;
 uniform float u_tanHalfFov;  // tan(vertical field of view / 2)
-uniform bool u_showGrid;     // checkerboard sky instead of stars
+uniform bool u_showGrid;     // checkerboard sky instead of stars and galaxy
 
 const float RS = 1.0;
 const float ESCAPE_R = 1000.0;  // beyond this an outgoing ray is as good as straight
@@ -51,23 +51,54 @@ float hash(vec3 p) {
     return fract(sin(dot(p, vec3(127.1, 311.7, 74.7))) * 43758.5453);
 }
 
-// Procedural stars. Space is cut into unit cells; a few cells hold one star near
-// their centre, and a direction that passes close to a star lights up.
+// Smooth random noise: random values at the corners of each unit cell, blended smoothly.
+float noise(vec3 p) {
+    vec3 i = floor(p);
+    vec3 f = fract(p);
+    f = f * f * (3.0 - 2.0 * f);
+    return mix(mix(mix(hash(i), hash(i + vec3(1.0, 0.0, 0.0)), f.x),
+                   mix(hash(i + vec3(0.0, 1.0, 0.0)), hash(i + vec3(1.0, 1.0, 0.0)), f.x), f.y),
+               mix(mix(hash(i + vec3(0.0, 0.0, 1.0)), hash(i + vec3(1.0, 0.0, 1.0)), f.x),
+                   mix(hash(i + vec3(0.0, 1.0, 1.0)), hash(i + vec3(1.0, 1.0, 1.0)), f.x), f.y), f.z);
+}
+
+// Noise at several scales added together: cloudy detail, big and small.
+float clouds(vec3 p) {
+    float sum = 0.0;
+    float amplitude = 0.5;
+    for (int i = 0; i < 4; ++i) {
+        sum += amplitude * noise(p);
+        p *= 2.03;
+        amplitude *= 0.5;
+    }
+    return sum;
+}
+
+// Procedural stars. Space is cut into cells; some cells hold one star near their
+// centre, and a direction lights up when it points within a pixel or so of a star.
 vec3 stars(vec3 dir) {
     vec3 color = vec3(0.0);
-    for (int layer = 0; layer < 3; ++layer) {
-        vec3 p = dir * (30.0 + 18.0 * float(layer));
-        vec3 cell = floor(p);
+    for (int layer = 0; layer < 4; ++layer) {
+        vec3 cell = floor(dir * (25.0 + 20.0 * float(layer)));
         vec3 seed = cell + 17.0 * float(layer);
-        if (hash(seed) > 0.85) {
+        if (hash(seed) > 0.8) {
             vec3 star = cell + 0.5 + 0.5 * (vec3(hash(seed + 1.7), hash(seed + 4.3), hash(seed + 9.1)) - 0.5);
-            float d = length(p - star);
-            float brightness = pow(hash(seed + 7.7), 3.0) * 2.0;
+            float angle = length(dir - normalize(star));         // in radians, roughly
+            float brightness = 0.12 + 2.5 * pow(hash(seed + 7.7), 8.0);
             vec3 tint = mix(vec3(1.0, 0.78, 0.6), vec3(0.7, 0.82, 1.0), hash(seed + 3.1));
-            color += tint * brightness * exp(-d * d * 400.0);
+            color += tint * brightness * exp(-angle * angle * 3.0e5);  // about 1 pixel wide
         }
     }
     return color;
+}
+
+// A faint Milky Way: a glowing band around the sky with a darker dust lane, tilted
+// so that it passes right behind the black hole from the starting view.
+vec3 galaxy(vec3 dir) {
+    float height = dot(dir, normalize(vec3(0.0, 1.0, 0.45)));  // distance from the band's centre line
+    float glow = exp(-height * height / 0.02) * (0.3 + 0.9 * clouds(dir * 6.0));
+    float dust = exp(-height * height / 0.002) * smoothstep(0.4, 0.7, clouds(dir * 12.0 + 3.0));
+    return vec3(0.55, 0.5, 0.7) * 0.4 * glow * (1.0 - 0.85 * dust);
 }
 
 // A checkerboard painted on the sky (blue above the horizon, orange below), so you
@@ -114,7 +145,7 @@ void main() {
     vec3 color = vec3(0.0);
     if (escaped) {
         vec3 skyDir = normalize(v);
-        color = u_showGrid ? skyGrid(skyDir) : stars(skyDir);
+        color = u_showGrid ? skyGrid(skyDir) : galaxy(skyDir) + stars(skyDir);
     }
     gl_FragColor = vec4(color, 1.0);
 }
