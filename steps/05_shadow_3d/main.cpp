@@ -15,6 +15,7 @@
 #include "demo.hpp"
 
 #include <SFML/Graphics.hpp>
+#include <SFML/OpenGL.hpp>
 
 #include <algorithm>
 #include <cmath>
@@ -86,6 +87,7 @@ int main(int argc, char* argv[]) {
     demo::openWindow(window, "Step 5 - The black hole in 3D", options);
     const demo::Caption caption;
 
+    std::cout << "GPU: " << reinterpret_cast<const char*>(glGetString(GL_RENDERER)) << '\n';
     if (!sf::Shader::isAvailable()) {
         std::cerr << "This GPU/driver does not support shaders.\n";
         return 1;
