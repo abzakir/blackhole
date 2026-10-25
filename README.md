@@ -266,6 +266,16 @@ python tools/make_gif.py build/frames/hero hero.gif --width 600 --fps 14 --skip 
 `--clean` hides the captions, `--spin` makes the 3D camera orbit by itself, and `--distance D`
 starts it D Schwarzschild radii away. Step 6 also takes `--mode 0|1|2` and `--grid`.
 
+Step 6 can also render a 14-second camera move at 1920x1080 (off-screen, so it doesn't matter how big
+your monitor is) and ffmpeg turns it into an MP4:
+
+```bash
+build/06_accretion_disk.exe --video build/video/clip      # add --no-titles for a clean version
+ffmpeg -framerate 30 -i build/video/clip/frame_%04d.jpg -vf "scale=in_range=pc:out_range=tv:in_color_matrix=bt601:out_color_matrix=bt709,format=yuv420p,fade=t=in:st=0:d=0.7,fade=t=out:st=13.3:d=0.7" -c:v libx264 -preset slow -crf 18 -movflags +faststart blackhole.mp4
+```
+
+`--tour` plays the same camera move in the window, on a loop.
+
 </details>
 
 ## Project layout

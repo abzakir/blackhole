@@ -1,5 +1,8 @@
 # CMake build output, screenshots and recorded frames
 build/
 
+# Rendered video clips (made with step 6's --video, too big for git)
+clips/
+
 # Python
 __pycache__/

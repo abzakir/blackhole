@@ -16,7 +16,10 @@
 // camera that starts further out and just above the disk.
 //
 // Command line: --distance D, --grid, --spin, --mode N (0, 1 or 2), plus demo.hpp's
-// --shot, --record and --clean.
+// --shot, --record and --clean. For clips:
+//   --tour          the camera follows a 14-second scripted move (loops in the window)
+//   --video folder  renders the tour at 1920x1080, 30 fps, into folder/frame_0000.jpg ...
+//   --no-titles     leaves the titles out of the video
 
 #include "demo.hpp"
 
@@ -25,8 +28,10 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
 #include <iostream>
 #include <optional>
 #include <string>
@@ -78,6 +83,51 @@ bool loadShader(sf::Shader& shader) {
     return true;
 }
 
+constexpr float kTourSeconds = 14.f;
+constexpr int kVideoFps = 30;
+const sf::Vector2u kVideoSize{1920, 1080};
+
+// The scripted camera move for clips: glide in from far away while orbiting a little
+// and sinking towards the disk plane, so its far side rises up over the shadow.
+void tourCamera(OrbitCamera& camera, float seconds) {
+    const float u = std::clamp(seconds / kTourSeconds, 0.f, 1.f);
+    const float eased = u * u * (3.f - 2.f * u);  // smoothstep: starts and stops gently
+    camera.distance = 30.f + (13.f - 30.f) * eased;
+    camera.azimuth = -0.5f + 0.8f * u;
+    camera.elevation = 0.32f + (0.06f - 0.32f) * eased;
+}
+
+// Titles burned into the video (LinkedIn plays videos muted), over a dark band so
+// they stay readable on top of the bright disk. They fade in during the second second.
+void drawVideoTitles(sf::RenderTarget& target, const sf::Font& font, float seconds) {
+    const sf::Vector2f size(target.getSize());
+    const float fade = std::clamp(seconds - 1.f, 0.f, 1.f);
+    const auto alpha = [fade](float full) { return static_cast<std::uint8_t>(full * fade); };
+
+    sf::VertexArray band(sf::PrimitiveType::TriangleStrip, 4);
+    band[0] = sf::Vertex{{0.f, size.y - 300.f}, sf::Color(0, 0, 0, 0)};
+    band[1] = sf::Vertex{{size.x, size.y - 300.f}, sf::Color(0, 0, 0, 0)};
+    band[2] = sf::Vertex{{0.f, size.y}, sf::Color(0, 0, 0, alpha(170.f))};
+    band[3] = sf::Vertex{{size.x, size.y}, sf::Color(0, 0, 0, alpha(170.f))};
+    target.draw(band);
+
+    const float margin = 64.f;
+    sf::Text title(font, "Ray traced in real time on the GPU", 46);
+    title.setFillColor(sf::Color(240, 240, 245, alpha(255.f)));
+    title.setPosition({margin, size.y - margin - 112.f});
+    target.draw(title);
+
+    sf::Text subtitle(font, "A Schwarzschild black hole and its accretion disk, with Doppler shift and gravitational redshift", 24);
+    subtitle.setFillColor(sf::Color(185, 187, 200, alpha(255.f)));
+    subtitle.setPosition({margin, size.y - margin - 44.f});
+    target.draw(subtitle);
+
+    sf::Text link(font, "github.com/abzakir/blackhole", 24);
+    link.setFillColor(sf::Color(242, 181, 107, alpha(255.f)));
+    link.setPosition({size.x - margin - link.getLocalBounds().size.x, size.y - margin - 44.f});
+    target.draw(link);
+}
+
 } // namespace
 
 int main(int argc, char* argv[]) {
@@ -85,6 +135,9 @@ int main(int argc, char* argv[]) {
     OrbitCamera camera;
     bool showGrid = false;
     bool spin = false;
+    bool tour = false;
+    bool showTitles = true;
+    std::optional<std::string> videoDir;
     int shiftMode = 2;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
@@ -96,6 +149,12 @@ int main(int argc, char* argv[]) {
             showGrid = true;
         } else if (arg == "--spin") {
             spin = true;
+        } else if (arg == "--tour") {
+            tour = true;
+        } else if (arg == "--video" && i + 1 < argc) {
+            videoDir = argv[++i];
+        } else if (arg == "--no-titles") {
+            showTitles = false;
         }
     }
 
@@ -112,7 +171,18 @@ int main(int argc, char* argv[]) {
     if (!loadShader(shader)) {
         return 1;
     }
-    const sf::RectangleShape screen(sf::Vector2f(window.getSize()));
+
+    // Video mode renders into an off-screen texture: it can be bigger than the screen,
+    // and every frame is saved from it while the window shows a scaled-down preview.
+    std::optional<sf::RenderTexture> video;
+    sf::Font titleFont;
+    if (videoDir) {
+        tour = true;
+        demo::hideCaptions = true;
+        std::filesystem::create_directories(*videoDir);
+        video.emplace(kVideoSize);
+        showTitles = showTitles && titleFont.openFromFile("C:/Windows/Fonts/segoeui.ttf");
+    }
 
     bool paused = false;
     bool dragging = false;
@@ -158,21 +228,54 @@ int main(int argc, char* argv[]) {
             break;
         }
 
-        // Recordings advance a fixed 1/60 s per frame, so they play back at the real speed.
-        const float dt = options.offline() ? 1.f / 60.f : frameClock.restart().asSeconds();
-        if (!paused) {
-            simTime += dt;
+        // Recordings advance a fixed time per frame, so they play back at the real speed.
+        if (video) {
+            if (frame >= static_cast<int>(kTourSeconds) * kVideoFps) {
+                std::printf("Recorded %d frames to %s\n", frame, videoDir->c_str());
+                break;
+            }
+            simTime = static_cast<float>(frame) / kVideoFps;
+        } else {
+            const float dt = options.offline() ? 1.f / 60.f : frameClock.restart().asSeconds();
+            if (!paused) {
+                simTime += dt;
+            }
         }
         if (spin) {
             camera.azimuth += 0.006f;
         }
-        setCameraUniforms(shader, camera, window.getSize());
+        if (tour) {
+            tourCamera(camera, video ? simTime : std::fmod(simTime, kTourSeconds));
+        }
+
+        sf::RenderTarget& target = video ? static_cast<sf::RenderTarget&>(*video) : window;
+        const sf::Vector2u targetSize = target.getSize();
+        setCameraUniforms(shader, camera, targetSize);
         shader.setUniform("u_showGrid", showGrid);
         shader.setUniform("u_shiftMode", shiftMode);
         shader.setUniform("u_time", simTime);
 
-        window.clear();
-        window.draw(screen, &shader);
+        target.clear();
+        target.draw(sf::RectangleShape(sf::Vector2f(targetSize)), &shader);
+
+        if (video) {
+            if (showTitles) {
+                drawVideoTitles(*video, titleFont, simTime);
+            }
+            video->display();
+            char name[32];
+            std::snprintf(name, sizeof name, "/frame_%04d.jpg", frame);
+            if (!video->getTexture().copyToImage().saveToFile(*videoDir + name)) {
+                return 1;
+            }
+            window.clear();
+            sf::Sprite preview(video->getTexture());
+            preview.setScale({static_cast<float>(window.getSize().x) / static_cast<float>(targetSize.x),
+                              static_cast<float>(window.getSize().y) / static_cast<float>(targetSize.y)});
+            window.draw(preview);
+            window.display();
+            continue;
+        }
 
         ++fpsFrames;
         if (fpsClock.getElapsedTime() >= sf::seconds(0.5f)) {
