@@ -10,7 +10,8 @@
 // a rectangle covering the window that is drawn with the shader. All the physics
 // lives in blackhole.frag.
 //
-// Command line (for screenshots): --distance D (in r_s), --stars, plus demo.hpp's --shot.
+// Command line: --distance D (in r_s), --stars, --spin (the camera orbits by itself,
+// for recordings), plus demo.hpp's --shot and --record.
 
 #include "demo.hpp"
 
@@ -74,12 +75,15 @@ int main(int argc, char* argv[]) {
     const demo::Options options = demo::parseOptions(argc, argv);
     OrbitCamera camera;
     bool showGrid = true;
+    bool spin = false;
     for (int i = 1; i < argc; ++i) {
         const std::string_view arg = argv[i];
         if (arg == "--distance" && i + 1 < argc) {
             camera.distance = static_cast<float>(std::atof(argv[++i]));
         } else if (arg == "--stars") {
             showGrid = false;
+        } else if (arg == "--spin") {
+            spin = true;
         }
     }
 
@@ -139,6 +143,9 @@ int main(int argc, char* argv[]) {
             break;
         }
 
+        if (spin) {
+            camera.azimuth += 0.006f;
+        }
         setCameraUniforms(shader, camera, window.getSize());
         shader.setUniform("u_showGrid", showGrid);
 
