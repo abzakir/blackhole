@@ -1,0 +1,5 @@
+# CMake build output, screenshots and recorded frames
+build/
+
+# Python
+__pycache__/
