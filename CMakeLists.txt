@@ -24,9 +24,12 @@ function(add_step name)
     target_include_directories(${name} PRIVATE steps/common)
     target_link_libraries(${name} PRIVATE SFML::Graphics)
     target_compile_options(${name} PRIVATE -Wall -Wextra)
+    # Shaders are read straight from the source folder, so editing one only needs a reload.
+    target_compile_definitions(${name} PRIVATE STEP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/steps/${name}")
 endfunction()
 
 add_step(01_straight_rays)
 add_step(02_event_horizon)
 add_step(03_bending_light)
 add_step(04_rk4)
+add_step(05_shadow_3d)
