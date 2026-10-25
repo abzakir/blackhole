@@ -11,6 +11,8 @@
 ![GLSL](https://img.shields.io/badge/GLSL-fragment%20shader-5586A4?logo=opengl&logoColor=white)
 ![License: MIT](https://img.shields.io/badge/license-MIT-blue)
 
+### [▶ Try it in your browser](https://abzakir.github.io/blackhole/demo/)
+
 [The steps](#the-steps) ·
 [How a pixel becomes a black hole](#how-a-pixel-becomes-a-black-hole) ·
 [Checking the original physics](#checking-the-original-physics) ·
@@ -243,6 +245,11 @@ build/05_shadow_3d.exe
 
 Editing a step's `blackhole.frag` doesn't need a rebuild: change something and press F5.
 
+No compiler? [`docs/demo/index.html`](docs/demo/index.html) is step 6 in WebGL, a single page that runs in any
+modern browser ([live version](https://abzakir.github.io/blackhole/demo/)). It takes the same keys, works with
+touch, and drops its resolution on slow GPUs. Add `?distance=14&mode=1&grid` to the URL to start from a
+different view.
+
 <details>
 <summary><b>Screenshots, recordings and GIFs</b></summary>
 
@@ -271,7 +278,9 @@ checks/
   shadow_check.cpp   original shader physics vs the textbook
 tools/
   make_gif.py        recorded frames -> GIF
-docs/                screenshots and GIFs for this page
+docs/
+  demo/index.html    step 6 in WebGL, served by GitHub Pages
+  images/, gifs/     screenshots and GIFs for this page
 ```
 
 ## Units
